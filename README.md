@@ -13,7 +13,6 @@ Tools and Technologies:
 - R Programming Language: For data manipulation, analysis, and visualization.
 - Caret Package: To streamline the modeling process.
 - ggplot2 and corrplot Packages: For advanced graphical representations.
-- rpart and rpart.plot: For creating and visualizing decision trees.
 
 Project Structure:
 1. Data loading and cleaning to prepare the dataset for analysis.
