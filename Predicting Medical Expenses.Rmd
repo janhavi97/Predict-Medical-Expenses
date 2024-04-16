@@ -1,0 +1,372 @@
+---
+title: "Predicting Medical Expenses"
+output: html_document
+date: "2024-02-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the needed libraries
+library(caret)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(conflicted)
+library(rpart)
+library(rpart.plot)
+
+# Set conflict preference
+conflict_prefer("filter", "dplyr")
+```
+
+## Load the file
+
+```{r}
+insurance_data <- read_csv("~/Desktop/Projects/insurance 2.csv")
+```
+
+```{r}
+# Summary statistics for numerical columns
+summary(insurance_data)
+```
+This is a small dataset consisting of 1338 entries. There are 7 attributes in total: age, sex, bmi, children, smoker, region, and charges.
+
+```{r}
+# Checking for missing values
+sapply(insurance_data, function(x) sum(is.na(x)))
+```
+
+There are no null values in the dataset.
+
+```{r}
+# Plotting the relation of smoker status and charges
+boxplot(charges ~ smoker,
+        data = insurance_data,
+        main = 'Charges by Smoker Status',
+        ylab = 'Charges',
+        xlab = 'Smoker Status',
+        col = c("lightblue", "salmon"), 
+        border = "black")
+```
+
+
+The median charges for smokers are substantially higher than for non-smokers. Smoking seems to have a significant impact on medical charges, with smokers incurring more charges on average than non-smokers.
+
+```{r}
+# Plotting the distribution of people across various age group for smokers and nonsmoker
+ggplot(insurance_data, aes(x = age, fill = smoker)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  scale_fill_manual(values = c("no" = "lightblue", "yes" = "salmon")) +
+  labs(title = "Age Group Demographics by Smoker Status",
+       x = "Age",
+       y = "Count of people",
+       fill = "Smoker Status") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+There is a considerable probability that a 19 year old will smoke. 19 — has the highest number of smokers compared to any other age.
+
+```{r}
+# Plotting the distribution of people across various age group for smokers and nonsmoker
+ggplot(insurance_data, aes(x = bmi, fill = smoker)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  scale_fill_manual(values = c("no" = "lightblue", "yes" = "salmon")) +
+  labs(title = "BMI by Smoker Status",
+       x = "BMI",
+       y = "Count of people",
+       fill = "Smoker Status") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+Smokers tend to have a lower BMI on average compared to non-smokers. 
+
+```{r}
+# Plotting the relationship between charges and age for smokers and nonsmoker
+ggplot(insurance_data, aes(x = age, y = charges, color = smoker)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Charges by Age", x = 'Age', y = 'Charges') + 
+  scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "K")) +
+  scale_color_manual(values = c("no" = "lightgreen", "yes" = "maroon")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+Smokers generally incur higher medical charges across all ages compared to non-smokers, with charges increasing with age for both groups.
+
+```{r}
+# Plotting the relationship between charges and bmi for smokers and nonsmoker
+ggplot(insurance_data, aes(x = bmi, y = charges, color = smoker)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Charges by BMI", x = 'BMI', y = 'Medical Expenses') + 
+  scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "K")) +
+  scale_color_manual(values = c("no" = "lightgreen", "yes" = "maroon")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+Smokers tend to have higher medical expenses across various BMI levels compared to non-smokers, with a less clear relationship between BMI and expenses for non-smokers.
+
+```{r}
+# Plotting the distribution of medical charges in different regions
+ggplot(insurance_data, aes(x = region, y = charges)) +
+  geom_bar(stat = "identity", color = "white", fill = "blue") +
+  scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+  labs(title = "Distribution of medical charges in different regions",
+       x = "Regions",
+       y = "Medical Expenses") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+Customer have higher medical expenses more who are living in southeast compared to other. While it’s important to note that healthcare costs can vary across different states and regions within the Southeast, the following factors are commonly cited:
+
+  1. **Chronic Conditions**: People in the Southeast often have more health issues like obesity, which can lead to higher doctor bills.
+  
+  2. **Healthcare Infrastructure**: There might not be enough clinics or doctors in some areas, making people use expensive emergency rooms more often.
+  
+  3. **Insurance Market**: Health insurance can be pricier in the Southeast because there's less competition and some people don't have Medicaid.
+  
+  4. **Lifestyle Factors**: Common habits in the Southeast, such as eating unhealthy food and exercising less, can make medical costs go up.
+  
+  5. **Socioeconomic Factors**: If people have less money, they might wait to go to the doctor until they really need to, which can be more costly.
+  
+  6. **Policy and Regulation**: The rules about health care in some Southeast states can make it more expensive for the people who live there.
+  
+  7. **Healthcare Provider Density**: With fewer medical centers and doctors, there's less pressure to keep prices low, so healthcare can cost more.
+
+```{r}
+# Plotting the correlation matrix to better understand the relationship between attributes.
+numerical_data <- cor(insurance_data %>% select(age, bmi, children, charges))
+
+corrplot(numerical_data, method="color", 
+         order = 'alphabet',
+         col = COL1('YlOrBr'),
+         col.lim = c(0, 1),
+         tl.col = "black",
+         addCoef.col = "white",
+         title = "Correlation Matrix",
+         number.cex = 1,
+         mar = c(0, 0, 2, 0)
+        )
+```
+
+
+The correlations between age and charges and between bmi and charges is most, suggesting a modest positive linear relationship. This means that, on average, as age or bmi increases, charges tend to increase as well.
+
+When considering the factors that influence medical charges, they can be ranked in order of importance as follows:
+1. smoker
+2. age
+3. bmi
+4. children
+5. region and sex
+
+
+```{r}
+# Filter the data for smokers
+smokers_data <- filter(insurance_data, smoker == "yes")
+
+# Create a linear model to predict charges using age for smokers
+model_smokers <- lm(charges ~ age, data = smokers_data)
+
+# Plot the data and the model prediction
+ggplot(model_smokers, aes(x = age, y = charges)) +
+  geom_point(aes(color = "Actual"), alpha = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ x, aes(color = "Predicted"), se = FALSE) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "K")) +
+  scale_color_manual(values = c("Actual" = "lightgreen", "Predicted" = "maroon")) +
+  labs(title = "Predictive Model of Medical Expenses for Smokers",
+       subtitle = "Using Age as a Predictor",
+       x = "Age",
+       y = "Medical Expenses",
+       color = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The graph predicts medical expenses for smokers, showing an upward trend where expenses increase with age fopr smoker.
+
+```{r} 
+# Coefficients of the model
+cat("Coefficients:\n")
+print(coef(model_smokers))
+
+# Make predictions
+predictions_smokers <- predict(model_smokers, newdata = smokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((smokers_data$charges - predictions_smokers)^2))))
+```
+
+For each additional year of age, a smoker's medical expenses are predicted to increase by about $305.
+
+```{r}
+# Filter the data for nonsmokers
+nonsmokers_data <- filter(insurance_data, smoker == "no")
+
+# Create a linear model to predict charges using age for nonsmokers
+model_nonsmokers <- lm(charges ~ age, data = nonsmokers_data)
+
+# Plot the data and the model prediction
+ggplot(model_nonsmokers, aes(x = age, y = charges)) +
+  geom_point(aes(color = "Actual"), alpha = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ x, aes(color = "Predicted"), se = FALSE) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "K")) +
+  scale_color_manual(values = c("Actual" = "lightgreen", "Predicted" = "maroon")) +
+  labs(title = "Predictive Model of Medical Expenses for Non-Smokers",
+       subtitle = "Using Age as a Predictor",
+       x = "Age",
+       y = "Medical Expenses",
+       color = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+# Coefficients of the model
+cat("Coefficients:\n")
+print(coef(model_nonsmokers))
+
+# Make predictions
+predictions_nonsmokers <- predict(model_nonsmokers, newdata = nonsmokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((nonsmokers_data$charges - predictions_nonsmokers)^2))))
+```
+
+
+For each additional year of age, a smoker's medical expenses are predicted to increase by about $267.
+
+In both the models, the loss is less for non-smokers but high for smokers. One way to tackle this problem is by using the BMI feature of the customers. Previously, we saw that there is highest co-relation between medical expenses and age, bmi follwed by children. Hence, let’s use this information to see if we can reduce the RMSE loss.
+
+```{r}
+model_smokers <- lm(charges ~ age + bmi, data = smokers_data)
+
+# Make predictions
+predictions_smokers <- predict(model_smokers, newdata = smokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((smokers_data$charges - predictions_smokers)^2))))
+```
+
+
+The RMSE loss has reduced by a large margin. The loss reduced from 10711 to 5722 by only considering bmi along with age.
+
+```{r}
+model_smokers <- lm(charges ~ age + bmi + children, data = smokers_data)
+
+# Make predictions
+predictions_smokers <- predict(model_smokers, newdata = smokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((smokers_data$charges - predictions_smokers)^2))))
+```
+
+
+The RMSE loss has reduced by not by a large margin. The loss reduced from 5722 to 5718. We see the weights decresing in value.
+
+```{r}
+model_nonsmokers <- lm(charges ~ age + bmi, data = nonsmokers_data)
+
+# Make predictions
+predictions_nonsmokers <- predict(model_nonsmokers, newdata = nonsmokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((nonsmokers_data$charges - predictions_nonsmokers)^2))))
+```
+
+
+There is no difference after considering bmi along with age for nonsmoker.
+
+```{r}
+model_nonsmokers <- lm(charges ~ age + bmi + children, data = nonsmokers_data)
+
+# Make predictions
+predictions_nonsmokers <- predict(model_nonsmokers, newdata = nonsmokers_data)
+
+# Calculate RMSE
+print(paste("RMSE:", sqrt(mean((nonsmokers_data$charges - predictions_nonsmokers)^2))))
+```
+
+
+The RMSE loss has reduced by not by a large margin. The loss reduced from 4662 to 4608. We see the weights decresing in value.
+
+
+Incorporating categorical data into a machine learning model broadens its analytical scope, allowing for a richer understanding of patterns and relationships. With R's robust tools, you can seamlessly convert categorical variables into a numeric format suitable for computational analysis.
+
+1. **Binary Categories**: Transform a two-category variable into numeric form by coding one category as 0 and the other as 1.
+2. **One-Hot Encoding**: For variables with multiple categories, create distinct columns for each category, marked with binary indicators.
+3. **Ordinal Encoding**: For categories with an inherent order, assign sequential numbers to maintain their relational hierarchy.
+
+These strategies enrich your model, enabling it to learn from the full spectrum of data, both numeric and categorical.
+
+```{r}
+insurance_data$smoker <- as.factor(insurance_data$smoker)
+insurance_data$region <- as.factor(insurance_data$region)
+insurance_data$sex <- as.factor(insurance_data$sex)
+
+# Train a decision tree model
+model <- lm(charges ~ ., data = insurance_data)
+
+# Calculate RMSE for training set
+predictions <- predict(model, newdata = insurance_data)
+
+# Calculate RMSE for test set
+print(paste("RMSE:", sqrt(mean((insurance_data$charges - predictions)^2))))
+```
+
+
+Final step of the project: Creating a Test Set
+
+```{r}
+# Split data into train and test sets
+set.seed(123)
+index <- createDataPartition(insurance_data$charges, p = 0.8, list = FALSE)
+train_data <- insurance_data[index, ]
+test_data <- insurance_data[-index, ]
+
+# Train a decision tree model
+model <- rpart(charges ~ ., data = train_data, method = "anova")
+
+# Make predictions on both training and test sets
+train_predictions <- predict(model, train_data)
+test_predictions <- predict(model, test_data)
+
+# Calculate RMSE for training set
+train_rmse <- sqrt(mean((train_data$charges - train_predictions)^2))
+print(paste("Training RMSE:", train_rmse))
+
+# Calculate RMSE for test set
+test_rmse <- sqrt(mean((test_data$charges - test_predictions)^2))
+print(paste("Test RMSE:", test_rmse))
+```
+
+The model performs decent when tested on the test set.
+
+
+```{r}
+# Predict charges using the model
+new_data <- data.frame(age = 40, sex = "female", bmi = 25, children = 1, smoker = "no", region = "northwest")
+predicted_charge <- predict(model, new_data)
+
+print(paste("Predicted Charge:", predicted_charge))
+```
+
+
+```{r}
+# Predict charges using the model
+new_data <- data.frame(age = 40, sex = "male", bmi = 25, children = 1, smoker = "yes", region = "southeast")
+predicted_charge <- predict(model, new_data)
+
+print(paste("Predicted Charge:", predicted_charge))
+```
