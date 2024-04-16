@@ -1,6 +1,6 @@
 ---
 title: "Predicting Medical Expenses"
-output: pdf_document
+output: html_document
 date: "2024-02-04"
 ---
 
@@ -88,7 +88,7 @@ Smokers tend to have a lower BMI on average compared to non-smokers.
 # Plotting the relationship between charges and age for smokers and nonsmoker
 ggplot(insurance_data, aes(x = age, y = charges, color = smoker)) +
   geom_point(alpha = 0.6) +
-  labs(title = "Charges by Age", x = 'Age', y = 'Charges') + 
+  labs(title = "Charges by Age", x = 'Age', y = 'Medical Expenses') + 
   scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "K")) +
   scale_color_manual(values = c("no" = "lightgreen", "yes" = "maroon")) +
   theme_minimal() +
